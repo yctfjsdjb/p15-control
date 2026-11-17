@@ -1,0 +1,10 @@
+# 编译输出
+obj/
+out/
+dist/
+
+# 微软的 WinRT 元数据：不进仓库（编译时从 lib\ 或原厂控制中心目录查找）
+lib/*.winmd
+
+*.tmp
+*.part
