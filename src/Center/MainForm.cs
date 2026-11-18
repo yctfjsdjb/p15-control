@@ -483,7 +483,6 @@ namespace P15
 
         // ================= Windows 电源选项（设备页） =================
         Select pwPlan;
-        readonly Choice[] pwMode = new Choice[3];
         readonly Dictionary<PowerOpts.Item, Select[]> pwCombos = new Dictionary<PowerOpts.Item, Select[]>();
 
         static readonly KeyValuePair<string, uint>[] LidOpts =
@@ -504,7 +503,7 @@ namespace P15
 
         void BuildPowerCard(Panel pg, int y)
         {
-            var c = NewCard(pg, "电源选项", y, 296);
+            var c = NewCard(pg, "电源选项", y, 256);
             powerCard = c;
             c.Controls.Add(new Label2("电源计划") { Bounds = new Rectangle(14, 40, 100, 30) });
             pwPlan = NewCombo(); pwPlan.Bounds = new Rectangle(c.Width - 14 - 184, 42, 184, 26);
@@ -518,35 +517,22 @@ namespace P15
                 Say(ok ? "已切换到电源计划：" + p.Name : "切换电源计划失败", !ok);
             };
             c.Controls.Add(pwPlan);
+            // 不提供 Windows「电源模式」（节能/平衡/性能）：它只在「平衡」计划下生效，其它计划里点不了；
+            // 名字又和主页的 BIOS 性能模式重复，容易混淆。性能高低用主页的性能模式和这里的电源计划控制。
 
-            c.Controls.Add(new Label2("电源模式") { Bounds = new Rectangle(14, 80, 100, 30) });
-            string[] mn = { "节能", "平衡", "性能" };
-            for (int i = 0; i < 3; i++)
-            {
-                int idx = i;
-                pwMode[i] = new Choice(null, mn[i], null) { Bounds = new Rectangle(c.Width - 14 - (3 - i) * 62 + 2, 80, 58, 30) };
-                pwMode[i].Click += (s, e) =>
-                {
-                    bool ok = PowerOpts.SetOverlay(idx);
-                    RefreshPower();
-                    Say(ok ? "Windows 电源模式：" + mn[idx] : "设置失败", !ok);
-                };
-                c.Controls.Add(pwMode[i]);
-            }
-
-            c.Controls.Add(new Label2("插电", true) { Bounds = new Rectangle(c.Width - 14 - 196, 120, 92, 20), Align = ContentAlignment.MiddleCenter });
-            c.Controls.Add(new Label2("电池", true) { Bounds = new Rectangle(c.Width - 14 - 96, 120, 92, 20), Align = ContentAlignment.MiddleCenter });
+            c.Controls.Add(new Label2("插电", true) { Bounds = new Rectangle(c.Width - 14 - 196, 80, 92, 20), Align = ContentAlignment.MiddleCenter });
+            c.Controls.Add(new Label2("电池", true) { Bounds = new Rectangle(c.Width - 14 - 96, 80, 92, 20), Align = ContentAlignment.MiddleCenter });
             var rows = new[] { Tuple.Create(PowerOpts.Item.Lid, "合上盖子时"), Tuple.Create(PowerOpts.Item.Display, "关闭显示器"), Tuple.Create(PowerOpts.Item.Sleep, "进入睡眠") };
             for (int r = 0; r < rows.Length; r++)
             {
                 var it = rows[r].Item1;
-                c.Controls.Add(new Label2(rows[r].Item2) { Bounds = new Rectangle(14, 144 + r * 38, 110, 30) });
+                c.Controls.Add(new Label2(rows[r].Item2) { Bounds = new Rectangle(14, 104 + r * 38, 110, 30) });
                 var pair = new Select[2];
                 for (int k = 0; k < 2; k++)
                 {
                     bool ac = k == 0;
                     var cb = NewCombo();
-                    cb.Bounds = new Rectangle(c.Width - 14 - 196 + k * 100, 146 + r * 38, 92, 26);
+                    cb.Bounds = new Rectangle(c.Width - 14 - 196 + k * 100, 106 + r * 38, 92, 26);
                     cb.SelectedIndexChanged += (s, e) =>
                     {
                         if (loadingUi) return;
@@ -560,7 +546,7 @@ namespace P15
                 pwCombos[it] = pair;
             }
             c.Controls.Add(new Label2("修改的是当前电源计划，不涉及 BIOS 里的功耗限制", true)
-            { Bounds = new Rectangle(14, 256, c.Width - 28, 34), Align = ContentAlignment.TopLeft });
+            { Bounds = new Rectangle(14, 216, c.Width - 28, 34), Align = ContentAlignment.TopLeft });
         }
 
         void RefreshPower()
@@ -571,10 +557,6 @@ namespace P15
                 var act = PowerOpts.Active();
                 pwPlan.Items.Clear();
                 foreach (var p in PowerOpts.Plans()) { pwPlan.Items.Add(p); if (p.Id == act) pwPlan.SelectedItem = p; }
-
-                bool balanced = act == PowerOpts.Balanced;
-                int ov = PowerOpts.GetOverlay();
-                for (int i = 0; i < 3; i++) { pwMode[i].Enabled = balanced; pwMode[i].Selected = balanced && ov == i; }
 
                 foreach (var kv in pwCombos)
                     for (int k = 0; k < 2; k++)
@@ -1101,7 +1083,7 @@ namespace P15
                 Say(now == want ? (want ? "摄像头已开启" : "摄像头已关闭") : "摄像头设置失败", now != want);
             };
             BuildPowerCard(pg, 546);
-            devSpacer = new Owner2 { Bounds = new Rectangle(0, 546 + 296, 1, 30) };   // 底部留白
+            devSpacer = new Owner2 { Bounds = new Rectangle(0, 546 + 256, 1, 30) };   // 底部留白
             pg.Controls.Add(devSpacer);
             devPage = pg;
             MakeScrollable(pg);

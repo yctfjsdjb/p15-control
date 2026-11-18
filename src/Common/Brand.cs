@@ -10,7 +10,7 @@ namespace P15
     public static class Brand
     {
         public const string Name = "P15 CONTROL";
-        public const string Version = "2.0.3";
+        public const string Version = "2.0.4";
         public const string Url = "https://github.com/yctfjsdjb/p15-control";
         public static readonly Color Ink = Color.FromArgb(242, 243, 245);    // 标志的白
         public static readonly Color Graphite = Color.FromArgb(30, 31, 35);  // 图标底色（石墨）

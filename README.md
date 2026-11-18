@@ -147,7 +147,6 @@ Get-PnpDevice -InstanceId 'ACPI\CLV000*'
 
 **电源选项**
 - 切换电源计划。
-- Windows 电源模式（节能 / 平衡 / 性能），在「平衡」计划下可用。
 - 合上盖子时、关闭显示器、进入睡眠：插电和电池分别设置。
 
 <br clear="right">
