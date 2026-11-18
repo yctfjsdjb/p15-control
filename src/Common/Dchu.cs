@@ -248,21 +248,37 @@ namespace P15
         }
 
         /// <summary>
-        /// 切换性能模式：与原厂 CC40 完全相同——向 OutLog 写入 "clevocc30^101^N"，
-        /// 由原厂 Fn 热键程序执行 BIOS 命令，保证 BIOS 里修改过的功耗配置照常生效。
+        /// 切换性能模式。BIOS 收到的命令和原厂完全一样：WMI 121 / 子命令 25 / 数据 = 模式号
+        /// （0 安静、1 省电、2 性能、3 娱乐；性能模式开了 CPU 动态加速时再加 0x80），这是原厂 Fn 热键程序日志里记录的同一条命令，
+        /// 所以 BIOS 里修改过的功耗配置照常生效。
+        ///   · 原厂 Fn 热键程序在运行：和原厂控制中心一样交给它执行（它还会顺带处理低刷新率和屏幕提示）；
+        ///   · 没有原厂程序（被卸载、没装）或它没响应：本程序直接发送这条命令，并把模式记到原厂设置里。
         /// </summary>
-        public static bool SetPowerMode(PowerMode mode, int timeoutMs = 4000)
+        public static bool SetPowerMode(PowerMode mode, int timeoutMs = 2500)
         {
             if (mode == PowerMode.Unknown) return false;
-            if (!OutLog("clevocc30^101^" + (int)mode)) { if (LastError == "") LastError = "未找到原厂 Fn 热键服务的事件源"; return false; }
-
-            var sw = Stopwatch.StartNew();
-            while (sw.ElapsedMilliseconds < timeoutMs)
+            if (FnKeyRunning && OutLog("clevocc30^101^" + (int)mode))
             {
-                Thread.Sleep(150);
-                if (GetPowerMode() == mode) return true;
+                var sw = Stopwatch.StartNew();
+                while (sw.ElapsedMilliseconds < timeoutMs)
+                {
+                    Thread.Sleep(150);
+                    if (GetPowerMode() == mode) return true;
+                }
             }
-            LastError = FnKeyRunning ? "原厂 Fn 热键程序未响应" : "原厂 Fn 热键程序(FnKey)没有运行";
+            return SetPowerModeDirect(mode);
+        }
+
+        /// <summary>不经过原厂程序，直接向 BIOS 发送切换命令（与原厂 Fn 热键程序发送的命令相同）</summary>
+        static bool SetPowerModeDirect(PowerMode mode)
+        {
+            uint data = (uint)mode;
+            if (mode == PowerMode.Performance && CpuBoostSupported && GetCpuBoost()) data |= 0x80;
+            if (!SetWmi(121, 25, data)) { if (LastError == "") LastError = "硬件接口不可用"; return false; }
+            WriteApp(1, 1, (byte)mode);   // 原厂程序也把当前模式记在这里，原厂软件和本程序读到的都一致
+            Thread.Sleep(100);
+            if (GetPowerMode() == mode) return true;
+            LastError = "BIOS 没有接受模式切换";
             return false;
         }
 

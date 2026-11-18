@@ -151,6 +151,7 @@ namespace P15
         Label2 fInfo;
         // 灯光
         Toggle kbOn, kbSleep, lowRefresh;
+        SettingRow lowRefreshRow;
         readonly Choice[] kbLevel = new Choice[4];
         readonly Dictionary<int, Choice> kbModes = new Dictionary<int, Choice>();
         readonly List<Swatch> swatches = new List<Swatch>();
@@ -419,7 +420,6 @@ namespace P15
             RefreshSensors();
             RefreshGpu();
             if (pm == PowerMode.Unknown) Say("无法读取硬件状态：请在「驱动」页安装原厂底层服务", true);
-            else if (!Dchu.FnKeyRunning) Say("提示：原厂 Fn 热键程序未运行，性能模式无法切换", true);
         }
 
         int sensorTick;
@@ -889,7 +889,7 @@ namespace P15
             blue = new Slider { Max = 10, Bounds = new Rectangle(8, 64, c2.Width - 16, 28) };
             blue.ValueChanged += (s, e) => { blueVal.Text = blue.Value == 0 ? "关" : blue.Value.ToString(); Dchu.SetBlueLight(blue.Value); };
             lowRefresh = new Toggle();
-            var rr = new SettingRow("省电时降低刷新率", "省电/安静模式下自动切到低刷新率省电", lowRefresh) { Bounds = new Rectangle(14, 104, c2.Width - 28, 48) };
+            var rr = lowRefreshRow = new SettingRow("省电时降低刷新率", "省电/安静模式下自动切到低刷新率省电", lowRefresh) { Bounds = new Rectangle(14, 104, c2.Width - 28, 48) };
             lowRefresh.Toggled += (s, e) => { bool ok = Dchu.SetLowRefresh(lowRefresh.On); Say(ok ? "已保存，下次切换性能模式时生效" : "设置失败：" + Dchu.LastError, !ok); };
             c2.Controls.AddRange(new Control[] { blueVal, blue, rr });
             return pg;
@@ -922,6 +922,10 @@ namespace P15
             int bl = Dchu.GetBlueLight();
             blue.Value = bl; blueVal.Text = bl == 0 ? "关" : bl.ToString();
             lowRefresh.On = Dchu.GetLowRefresh();
+            // 切换刷新率由原厂 Fn 热键程序执行：没有它时这一项不起作用
+            bool fn = Dchu.FnKeyRunning;
+            lowRefresh.Enabled = fn;
+            lowRefreshRow.Desc.Text = fn ? "省电/安静模式下自动切到低刷新率省电" : "需要原厂 Fn 热键程序（「驱动」页的原厂底层服务）";
             loadingUi = false;
         }
 

@@ -78,4 +78,9 @@ New-Item -ItemType Directory -Force $dist | Out-Null
 Gz (Join-Path $out 'P15控制中心.exe') (Join-Path $obj 'App.gz')
 $instRes = @("/resource:$obj\App.gz,P15.App.gz")
 if (Test-Path $dchu) { Gz $dchu (Join-Path $obj 'Dchu.gz'); $instRes += "/resource:$obj\Dchu.gz,P15.Dchu.gz" }
+# 原厂硬件驱动 AcpiBridge（微软签名）：重装系统后设备没有驱动时，安装包自动装上
+foreach ($n in 'AcpiBridge.inf','AcpiBridge.sys','AcpiBridge.cat') {
+    $p = Join-Path $root "lib\acpibridge\$n"
+    if (Test-Path $p) { Gz $p (Join-Path $obj "Acpi.$n.gz"); $instRes += "/resource:$obj\Acpi.$n.gz,P15.Acpi.$n.gz" }
+}
 Build (Join-Path $dist "P15CONTROL-Setup-$ver.exe") @('Common','Installer') $instRes

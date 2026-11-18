@@ -82,19 +82,61 @@ namespace P15
             catch { return null; }
         }
 
-        /// <summary>原厂 Fn 热键服务（提供硬件接口）是否已安装</summary>
-        public static bool OemPresent()
+        // ---------------- 原厂硬件驱动（ACPI\CLV0001，AcpiBridge） ----------------
+        // 控制中心通过它和 BIOS 通信。重装系统后这个设备可能没有驱动：安装包自带微软签名的原厂驱动，需要时自动装上。
+        public enum AcpiState { Ok, NeedsDriver, Absent }
+
+        [StructLayout(LayoutKind.Sequential)] struct DevInfo { public int cbSize; public Guid ClassGuid; public int DevInst; public IntPtr Reserved; }
+        [DllImport("setupapi.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr SetupDiGetClassDevs(IntPtr cls, string enumerator, IntPtr hwnd, int flags);
+        [DllImport("setupapi.dll", SetLastError = true)] static extern bool SetupDiEnumDeviceInfo(IntPtr set, int index, ref DevInfo data);
+        [DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Unicode)] static extern bool SetupDiGetDeviceInstanceId(IntPtr set, ref DevInfo data, System.Text.StringBuilder id, int size, out int need);
+        [DllImport("setupapi.dll")] static extern bool SetupDiDestroyDeviceInfoList(IntPtr set);
+        [DllImport("cfgmgr32.dll")] static extern int CM_Get_DevNode_Status(out int status, out int problem, int devInst, int flags);
+
+        public static AcpiState Acpi()
         {
+            var set = SetupDiGetClassDevs(IntPtr.Zero, "ACPI", IntPtr.Zero, 0x2 | 0x4);   // DIGCF_PRESENT | DIGCF_ALLCLASSES
+            if (set == IntPtr.Zero || set == new IntPtr(-1)) return AcpiState.Absent;
             try
             {
-                var pf86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-                if (File.Exists(Path.Combine(pf86, @"ControlCenter\DCHU\InsydeDCHU.dll"))) return true;
-                using (var k = Registry.CurrentUser.OpenSubKey(@"Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages"))
-                    return k != null && k.GetSubKeyNames().Any(n => n.StartsWith("CLEVOCO.Fnhotkeys", StringComparison.OrdinalIgnoreCase));
+                for (int i = 0; ; i++)
+                {
+                    var d = new DevInfo { cbSize = Marshal.SizeOf(typeof(DevInfo)) };
+                    if (!SetupDiEnumDeviceInfo(set, i, ref d)) break;
+                    var sb = new System.Text.StringBuilder(260); int need;
+                    if (!SetupDiGetDeviceInstanceId(set, ref d, sb, sb.Capacity, out need)) continue;
+                    if (!sb.ToString().StartsWith(@"ACPI\CLV0001", StringComparison.OrdinalIgnoreCase)) continue;
+                    int st, prob;
+                    if (CM_Get_DevNode_Status(out st, out prob, d.DevInst, 0) != 0) return AcpiState.NeedsDriver;
+                    return prob == 0 && (st & 0x8) != 0 ? AcpiState.Ok : AcpiState.NeedsDriver;   // DN_STARTED
+                }
             }
-            catch { return false; }
+            finally { SetupDiDestroyDeviceInfoList(set); }
+            return AcpiState.Absent;
         }
 
+        /// <summary>需要时安装自带的原厂 ACPI 驱动；返回结果说明（null 表示不需要）</summary>
+        public static string EnsureAcpiDriver(Action<string> say)
+        {
+            if (Acpi() != AcpiState.NeedsDriver) return null;
+            say("正在安装原厂硬件驱动（AcpiBridge）…");
+            var tmp = Path.Combine(Path.GetTempPath(), "P15CONTROL-acpi");
+            try
+            {
+                Directory.CreateDirectory(tmp);
+                foreach (var n in new[] { "AcpiBridge.inf", "AcpiBridge.sys", "AcpiBridge.cat" })
+                    using (var res = Assembly.GetExecutingAssembly().GetManifestResourceStream("P15.Acpi." + n + ".gz"))
+                    {
+                        if (res == null) return "安装包里没有原厂硬件驱动";
+                        using (var z = new System.IO.Compression.GZipStream(res, System.IO.Compression.CompressionMode.Decompress))
+                        using (var f = File.Create(Path.Combine(tmp, n))) z.CopyTo(f);
+                    }
+                Run(Path.Combine(Environment.SystemDirectory, "pnputil.exe"), "/add-driver \"" + Path.Combine(tmp, "AcpiBridge.inf") + "\" /install", 120000);
+                return Acpi() == AcpiState.Ok ? "已装好原厂硬件驱动" : "原厂硬件驱动已安装，重启电脑后生效";
+            }
+            catch (Exception ex) { return "安装原厂硬件驱动失败：" + ex.Message; }
+            finally { try { Directory.Delete(tmp, true); } catch { } }
+        }
         public static void Run(string exe, string args, int timeout = 20000)
         {
             try
@@ -113,6 +155,8 @@ namespace P15
                     try { p.Kill(); p.WaitForExit(5000); } catch { }
             Thread.Sleep(300);
         }
+
+        public static string AcpiResult;
 
         // ---------------- 安装 ----------------
         public static void Install(string dir, bool desktop, bool autostart, Action<string> say)
@@ -147,6 +191,8 @@ namespace P15
                 try { var p = Path.Combine(dir, old); if (File.Exists(p)) File.Delete(p); } catch { }
             var un = Path.Combine(dir, UninstallExe);
             if (!string.Equals(Application.ExecutablePath, un, StringComparison.OrdinalIgnoreCase)) File.Copy(Application.ExecutablePath, un, true);
+
+            AcpiResult = EnsureAcpiDriver(say);
 
             say("正在创建快捷方式…");
             Shortcut(StartMenuLink, exe, dir);
@@ -305,11 +351,14 @@ namespace P15
                 Controls.Add(new SettingRow("桌面快捷方式", "", tDesktop, 34) { Bounds = new Rectangle(24, y, W - 48, 34) }); y += 40;
                 Controls.Add(new SettingRow("开机自动启动", "在托盘运行，不弹权限确认", tAuto, 44) { Bounds = new Rectangle(24, y, W - 48, 44) }); y += 50;
                 Controls.Add(new SettingRow("安装完成后运行", "", tRun, 34) { Bounds = new Rectangle(24, y, W - 48, 34) }); y += 44;
-                if (!SetupApp.OemPresent())
+                var acpi = SetupApp.Acpi();
+                if (acpi == SetupApp.AcpiState.Absent)
                 {
-                    status.Text = "没检测到原厂底层服务：硬件功能需要它，装好后可在控制中心「驱动」页安装「原厂底层服务」";
+                    status.Text = "这台电脑没有蓝天的硬件接口（ACPI\\CLV0001），硬件相关功能用不了";
                     status.Fore = Theme.P.Warn;
                 }
+                else if (acpi == SetupApp.AcpiState.NeedsDriver)
+                    status.Text = "会同时装上原厂硬件驱动（AcpiBridge），装好就能用";
             }
             else
             {
@@ -354,7 +403,7 @@ namespace P15
                 {
                     bool desk = tDesktop.On, auto = tAuto.On;
                     await Task.Run(() => SetupApp.Install(dir, desk, auto, m => Say(m)));
-                    Say("安装完成");
+                    Say(SetupApp.AcpiResult == null ? "安装完成" : "安装完成。" + SetupApp.AcpiResult);
                     if (tRun.On)
                         try { Process.Start(new ProcessStartInfo(Path.Combine(dir, SetupApp.AppExe)) { UseShellExecute = true, WorkingDirectory = dir }); } catch { }
                 }
