@@ -334,8 +334,9 @@ namespace P15
             MouseDown += (s, e) => DragMove();
             Controls.Add(mark);
             var old = SetupApp.InstalledVersion();
+            bool upgrade = old != null && old != Brand.Version;   // 装的是同一个版本时就是重新安装，不显示「更新到同一版本」
             string sub = uninstall ? "将从这台电脑上删除 " + Brand.Name
-                       : old == null ? "版本 " + Brand.Version + "，适用于七彩虹 隐星 P15（蓝天模具）"
+                       : !upgrade ? "版本 " + Brand.Version + "，适用于七彩虹 隐星 P15（蓝天模具）"
                        : "已安装 " + old + "，将更新到 " + Brand.Version;
             Controls.Add(new Label2(sub, true) { Bounds = new Rectangle(24, 58, W - 48, 20) });
 
@@ -377,7 +378,7 @@ namespace P15
 
             int by = ClientSize.Height - 24 - 38;
             cancel = new Btn("取消") { Bounds = new Rectangle(24, by, 120, 38) };
-            go = new Btn(uninstall ? "卸载" : (old == null ? "安装" : "更新"), true) { Bounds = new Rectangle(24 + 128, by, W - 48 - 128, 38) };
+            go = new Btn(uninstall ? "卸载" : (upgrade ? "更新" : "安装"), true) { Bounds = new Rectangle(24 + 128, by, W - 48 - 128, 38) };
             cancel.Click += (s, e) => { if (!busy) Close(); };
             go.Click += async (s, e) => await Go();
             Controls.Add(cancel); Controls.Add(go);

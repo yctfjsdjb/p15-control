@@ -139,6 +139,24 @@ namespace P15
             g.TextRenderingHint = th;
         }
 
+        static readonly StringFormat FOneLine = MakeOneLine();
+        static StringFormat MakeOneLine()
+        {
+            var f = Fmt(StringAlignment.Near, StringAlignment.Center);
+            f.FormatFlags |= StringFormatFlags.NoWrap;
+            return f;
+        }
+
+        /// <summary>单行文字：放不下时末尾显示「…」，不会折成两行叠在一起</summary>
+        public static void TextLine(Graphics g, string s, Font f, Color c, RectangleF r)
+        {
+            if (string.IsNullOrEmpty(s)) return;
+            var th = g.TextRenderingHint;
+            g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+            using (var b = new SolidBrush(c)) g.DrawString(s, f, b, r, FOneLine);
+            g.TextRenderingHint = th;
+        }
+
         /// <summary>单行文字尺寸（与 Text 的绘制方式一致）</summary>
         public static SizeF Measure(Graphics g, string s, Font f) { return g.MeasureString(s, f, PointF.Empty, FTopLeft); }
     }

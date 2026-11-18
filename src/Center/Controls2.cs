@@ -182,9 +182,9 @@ namespace P15
             g.SmoothingMode = SmoothingMode.AntiAlias;
             using (var b = new SolidBrush(Dot)) g.FillEllipse(b, 4, Height / 2f - 4, 8, 8);
             int right = ActionText != null ? 80 : 96;
-            Theme.Text(g, Title, Theme.Body, p.Text, new RectangleF(20, string.IsNullOrEmpty(Sub) ? 0 : 6, Width - 20 - right, string.IsNullOrEmpty(Sub) ? Height : 20));
+            Theme.TextLine(g, Title, Theme.Body, p.Text, new RectangleF(20, string.IsNullOrEmpty(Sub) ? 0 : 6, Width - 20 - right, string.IsNullOrEmpty(Sub) ? Height : 20));
             if (!string.IsNullOrEmpty(Sub))
-                Theme.Text(g, Sub, Theme.Small, p.SubText, new RectangleF(20, 27, Width - 20 - right, 18));
+                Theme.TextLine(g, Sub, Theme.Small, p.SubText, new RectangleF(20, 27, Width - 20 - right, 18));
             if (ActionText != null)
             {
                 var r = BtnRect;

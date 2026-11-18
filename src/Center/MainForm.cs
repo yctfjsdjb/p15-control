@@ -1181,7 +1181,7 @@ namespace P15
             var hero = NewCard(drvEmpty, null, 6, 312);
             hero.Controls.Add(new Label2("") { Font = Theme.IconLarge, Fore = Theme.P.Accent, Align = ContentAlignment.MiddleCenter, Bounds = new Rectangle(0, 34, hero.Width, 64) });
             hero.Controls.Add(new Label2("驱动管理") { Font = Theme.Title, Align = ContentAlignment.MiddleCenter, Bounds = new Rectangle(0, 104, hero.Width, 30) });
-            hero.Controls.Add(new Label2("检测本机驱动，从七彩虹官网和 NVIDIA 官网\n下载并静默安装。\n驱动装好后可以删除组件，需要时再获取。", true)
+            hero.Controls.Add(new Label2("检测本机驱动，从七彩虹官网和 Intel 官网\n下载并静默安装。NVIDIA 显卡驱动请自行安装。\n驱动装好后可以删除组件，需要时再获取。", true)
             { Align = ContentAlignment.TopCenter, Bounds = new Rectangle(20, 142, hero.Width - 40, 60) });
             var bGet = new Btn("获取驱动组件", true) { Bounds = new Rectangle(40, 214, hero.Width - 80, 40) };
             bGet.Click += (s, e) => GetDriverComponent();
@@ -1308,7 +1308,7 @@ namespace P15
                 ty += 48;
             };
             tool("驱动安装器", "手动选择要安装的驱动", "打开", (s, e) => LaunchSetup(""));
-            tool("收尾清理", "删除安装包缓存、NVIDIA 残留、旧驱动包", "清理", (s, e) => CleanupDrivers());
+            tool("收尾清理", "删除驱动安装包缓存和被取代的旧驱动包", "清理", (s, e) => CleanupDrivers());
             tool("删除驱动组件", "驱动装好后可删除，需要时再获取", "删除", (s, e) => RemoveDriverComponent());
             t.Height = ty + 6; drvFull.Controls.Add(t); y += t.Height + 40;   // 底部留出状态栏位置
 
@@ -1378,7 +1378,7 @@ namespace P15
                 if (IsDisposed) return;
                 if (olds.Count == 0 && cache < 1048576) { Say("没有需要清理的内容"); return; }
                 Say("");
-                var msg = "将要清理：\n· 驱动安装包缓存和 NVIDIA 安装残留，约 " + (cache / 1048576) + " MB\n· 驱动库里被新版本取代的旧驱动包 " + olds.Count + " 个（正在使用的会自动跳过）";
+                var msg = "将要清理：\n· 驱动安装包缓存，约 " + (cache / 1048576) + " MB\n· 驱动库里被新版本取代的旧驱动包 " + olds.Count + " 个（正在使用的会自动跳过）";
                 if (!Dialog.Ask(this, "收尾清理", msg, "开始清理")) return;
                 Say("正在清理…", false, true);
                 var r = await Task.Run(() => { int del = DriverCleanup.DeleteOldDrivers(olds); long freed = DriverCleanup.CleanFiles(); return Tuple.Create(del, freed); });
@@ -1419,7 +1419,7 @@ namespace P15
         /// <summary>删除驱动组件及其全部残留（已安装的驱动不受影响）</summary>
         async void RemoveDriverComponent()
         {
-            if (!Dialog.Ask(this, "删除驱动组件", "将删除：驱动安装器、下载的驱动安装包和缓存、安装记录（C:\\ProgramData\\P15Center）、NVIDIA 安装残留、桌面上的驱动安装报告。\n\n已经装好的驱动不会受影响，以后需要时可以重新获取。", "删除", "取消"))
+            if (!Dialog.Ask(this, "删除驱动组件", "将删除：驱动安装器、下载的驱动安装包和缓存、安装记录（C:\\ProgramData\\P15Center）、桌面上的驱动安装报告。\n\n已经装好的驱动不会受影响，以后需要时可以重新获取。", "删除", "取消"))
                 return;
             Say("正在删除驱动组件…");
             var report = await Task.Run(() =>
@@ -1448,7 +1448,6 @@ namespace P15
                 if (!delFile(SetupExe)) left.Add(SetupExe);
                 delFile(SetupExe + ".tmp");
                 delDir(StateFile.Dir);                 // C:\ProgramData\P15Center（缓存、解压文件、安装记录）
-                delDir(@"C:\NVIDIA");                  // NVIDIA 安装包解压残留
                 foreach (var desk in new[] { Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory) })
                 {
                     var r = Path.Combine(desk, "P15驱动安装报告.txt");

@@ -17,7 +17,7 @@ namespace P15
 
         static readonly string[] Dirs =
         {
-            StateFile.CacheDir, @"C:\NVIDIA", Path.Combine(Path.GetTempPath(), "NVIDIA Corporation"), @"C:\ProgramData\NVIDIA Corporation\Downloader"
+            StateFile.CacheDir   // 只清理本程序下载的安装包缓存；NVIDIA 驱动由用户自己装，不动它的文件
         };
 
         static int Pnputil(string args, out string output)
@@ -62,8 +62,10 @@ namespace P15
             }
             if (cur != null) list.Add(cur);
             var old = new List<OldDriver>();
-            foreach (var g in list.Where(d => d.Original != null && d.Version != null).GroupBy(d => d.Original))
-                old.AddRange(g.OrderByDescending(d => new Version(d.Version)).Skip(1));
+            // 版本号解析不了的包（个别厂商写法特殊）直接跳过，不能让一个包导致整次清理失败
+            Version ignored;
+            foreach (var g in list.Where(d => d.Original != null && d.Version != null && Version.TryParse(d.Version, out ignored)).GroupBy(d => d.Original))
+                old.AddRange(g.OrderByDescending(d => Version.Parse(d.Version)).Skip(1));
             return old;
         }
 
@@ -80,7 +82,7 @@ namespace P15
             return n;
         }
 
-        /// <summary>可清理的文件大小（安装包缓存 + NVIDIA 安装残留）</summary>
+        /// <summary>可清理的文件大小（驱动安装包缓存）</summary>
         public static long PendingBytes()
         {
             long n = 0;

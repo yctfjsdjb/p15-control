@@ -11,8 +11,6 @@ using System.Threading;
 
 namespace P15
 {
-    public sealed class NvRelease { public string Version, Url, Date; public long Size; }
-
     public static class Engine
     {
         public static Action<string> Log = s => { };
@@ -24,31 +22,6 @@ namespace P15
         {
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | (SecurityProtocolType)12288; // TLS1.2 / 1.3
             DriverCleanup.Log = L;   // 收尾清理的过程写进同一份日志
-        }
-
-        // ---------------- NVIDIA 最新驱动 ----------------
-        public static NvRelease NvidiaLatest()
-        {
-            // psid 129 = GeForce RTX 40 Series (Notebooks)，pfid 1008 = RTX 4050 Laptop GPU，osID 135 = Windows 11
-            const string u = "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php" +
-                             "?func=DriverManualLookup&psid=129&pfid=1008&osID=135&languageCode=2052&beta=0&isWHQL=1&dltype=-1&dch=1&upCRD=0&qnf=0&sort1=0&numberOfResults=1";
-            using (var wc = new WebClient { Encoding = Encoding.UTF8 })
-            {
-                var j = wc.DownloadString(u);
-                Func<string, string> get = k => { var m = Regex.Match(j, "\"" + k + "\"\\s*:\\s*\"([^\"]*)\""); return m.Success ? m.Groups[1].Value.Replace("\\/", "/") : ""; };
-                var r = new NvRelease { Version = get("Version"), Url = get("DownloadURL"), Date = get("ReleaseDateTime") };
-                if (r.Version == "" || !r.Url.StartsWith("https://")) throw new Exception("NVIDIA 官网没有返回驱动信息");
-                return r;
-            }
-        }
-
-        /// <summary>Windows 驱动版本 32.0.16.2114 → NVIDIA 版本 621.14</summary>
-        public static string NvVersionFromWin(string winVer)
-        {
-            var digits = (winVer ?? "").Replace(".", "");
-            if (digits.Length < 5) return "";
-            var last5 = digits.Substring(digits.Length - 5);
-            return last5.Substring(0, 3) + "." + last5.Substring(3);
         }
 
         // ---------------- 下载（断点续传） ----------------

@@ -254,19 +254,26 @@ namespace P15
         ///   · 原厂 Fn 热键程序在运行：和原厂控制中心一样交给它执行（它还会顺带处理低刷新率和屏幕提示）；
         ///   · 没有原厂程序（被卸载、没装）或它没响应：本程序直接发送这条命令，并把模式记到原厂设置里。
         /// </summary>
+        static readonly object ModeGate = new object();
+
         public static bool SetPowerMode(PowerMode mode, int timeoutMs = 2500)
         {
             if (mode == PowerMode.Unknown) return false;
-            if (FnKeyRunning && OutLog("clevocc30^101^" + (int)mode))
+            // 托盘菜单和窗口几乎同时切换时排队执行：保证最后点的模式最后生效，
+            // 不会出现前一次等待超时后又补发一次，把后点的模式改回去
+            lock (ModeGate)
             {
-                var sw = Stopwatch.StartNew();
-                while (sw.ElapsedMilliseconds < timeoutMs)
+                if (FnKeyRunning && OutLog("clevocc30^101^" + (int)mode))
                 {
-                    Thread.Sleep(150);
-                    if (GetPowerMode() == mode) return true;
+                    var sw = Stopwatch.StartNew();
+                    while (sw.ElapsedMilliseconds < timeoutMs)
+                    {
+                        Thread.Sleep(150);
+                        if (GetPowerMode() == mode) return true;
+                    }
                 }
+                return SetPowerModeDirect(mode);
             }
-            return SetPowerModeDirect(mode);
         }
 
         /// <summary>不经过原厂程序，直接向 BIOS 发送切换命令（与原厂 Fn 热键程序发送的命令相同）</summary>

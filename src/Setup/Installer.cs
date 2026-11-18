@@ -43,8 +43,6 @@ namespace P15
 
         public static void Install(DriverItem d, Action<string, int> progress, CancellationToken ct)
         {
-            if (d.Kind == PkgKind.NvidiaLatest) { InstallNvidia(progress, ct); return; }
-
             var file = Path.GetFileName(new Uri(d.Url).LocalPath);
             progress("下载中", 0);
             var archive = Engine.Download(d.Url, file, p => progress("下载 " + p + "%", p), ct);
@@ -88,32 +86,6 @@ namespace P15
                     break;
                 default: throw new Exception("未定义安装方式");
             }
-        }
-
-        static void InstallNvidia(Action<string, int> progress, CancellationToken ct)
-        {
-            progress("查询最新版", 0);
-            var rel = Engine.NvidiaLatest();
-            Engine.Log("NVIDIA 最新驱动 " + rel.Version);
-            var file = Path.GetFileName(new Uri(rel.Url).LocalPath);
-            var exe = Engine.Download(rel.Url, file, p => progress("下载 " + p + "%", p), ct);
-            ct.ThrowIfCancellationRequested();
-            progress("解压中", 100);
-            string dir = null;
-            try { dir = Engine.Extract(exe, "nvidia"); } catch (Exception ex) { Engine.Log("解压 NVIDIA 安装包失败，改用整包静默安装：" + ex.Message); }
-            progress("安装中（屏幕会闪烁）", 100);
-            if (dir != null && File.Exists(Path.Combine(dir, "setup.exe")))
-            {
-                // 只装 显示驱动 + HD 音频 + PhysX，不装 NVIDIA App / GeForce Experience
-                int code = Engine.RunInstaller(Path.Combine(dir, "setup.exe"), "-s -noreboot -noeula -nofinish -passive Display.Driver HDAudio.Driver PhysX");
-                if (Engine.Ok(code)) return;
-                Engine.Log("按组件安装返回 " + code + "，改用默认组件安装");
-                code = Engine.RunInstaller(Path.Combine(dir, "setup.exe"), "-s -noreboot -noeula");
-                if (!Engine.Ok(code)) throw new Exception("NVIDIA 安装程序返回错误码 " + code);
-                return;
-            }
-            int c2 = Engine.RunInstaller(exe, "-s -noreboot -noeula");
-            if (!Engine.Ok(c2)) throw new Exception("NVIDIA 安装程序返回错误码 " + c2);
         }
     }
 }

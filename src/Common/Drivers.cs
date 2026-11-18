@@ -12,13 +12,11 @@ namespace P15
 {
     public enum Tier { Required = 0, Recommended = 1, Optional = 2 }
     public enum DrvStatus { Unknown, Installed, NotInstalled, Failed, Installing, Outdated }
-    public enum PkgKind { OemArchive, NvidiaLatest }
 
     public sealed class DriverItem
     {
         public string Id, Name, Note, Url, Source;
         public Tier Tier;
-        public PkgKind Kind = PkgKind.OemArchive;
         public bool Background;       // 是否有常驻后台程序/服务
         public int SizeMB;
         public string[] HwIds = new string[0];   // 设备 ID 正则（任一匹配且驱动非微软通用即算已安装）
@@ -56,8 +54,7 @@ namespace P15
             new DriverItem { Id="serialio", Name="英特尔串行 IO", Tier=Tier.Required, Url=Oem+"02_SerialIO.rar", Source="原厂", SizeMB=3,
                 Note="触控板 I2C、GPIO", HwIds=new[]{@"PCI\\VEN_8086&DEV_51E8", @"ACPI\\INTC1055"}, ProviderRx="(?i)intel" },
             // ---------- 推荐 ----------
-            new DriverItem { Id="nvidia", Name="NVIDIA 显卡驱动 (最新版)", Tier=Tier.Recommended, Kind=PkgKind.NvidiaLatest, Source="NVIDIA 官方最新", SizeMB=650,
-                Note="不用原厂 2023 老版本；只装驱动+PhysX，不装 NVIDIA App", HwIds=new[]{@"PCI\\VEN_10DE&DEV_28A1"}, ProviderRx="(?i)nvidia" },
+            // NVIDIA 显卡驱动不在这里装：用户自己从 NVIDIA 官网 / NVIDIA App 安装
             new DriverItem { Id="igfx", Name="英特尔核显驱动 (UHD)", Tier=Tier.Recommended,
                 Url="https://downloadmirror.intel.com/929468/gfx_win_101.7092.exe", Source="Intel 官方", SizeMB=745,
                 Note="32.0.101.7092，只装驱动本体，不装 Intel 显卡控制中心；混合模式下才会用到核显", HwIds=new[]{@"PCI\\VEN_8086&DEV_46[A-D]"}, ProviderRx="(?i)intel", StoreInf="iigd_dch.inf" },

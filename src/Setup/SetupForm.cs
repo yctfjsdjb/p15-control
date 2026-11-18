@@ -57,11 +57,6 @@ namespace P15
         CancellationTokenSource cts;
         bool working;
 
-        [DllImport("user32.dll")] static extern bool ReleaseCapture();
-        [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, int msg, IntPtr w, IntPtr l);
-        [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int v, int size);
-        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)] static extern int SetWindowTheme(IntPtr h, string app, string id);
-
         public SetupForm(string mode, string[] preselect)
         {
             this.mode = mode; this.preselect = preselect;
@@ -139,22 +134,6 @@ namespace P15
             status.Text = "正在检测已安装的驱动…";
             var res = await Task.Run(() => StateFile.Merge(Detector.Detect()));
             foreach (var r in rows) { DriverState s; if (res.TryGetValue(r.Item.Id, out s)) r.State = s; r.Invalidate(); }
-            // NVIDIA：对比官网最新版本
-            var nv = rows.First(r => r.Item.Id == "nvidia");
-            try
-            {
-                var rel = await Task.Run(() => Engine.NvidiaLatest());
-                var mine = Engine.NvVersionFromWin(nv.State.Version);
-                if (nv.State.Status == DrvStatus.Installed && mine != "" && string.CompareOrdinal(mine, rel.Version) < 0)
-                {
-                    nv.State.Status = DrvStatus.Outdated;
-                    nv.State.Message = "当前 " + mine + "，最新 " + rel.Version;
-                    StateFile.Save("nvidia", DrvStatus.Outdated, nv.State.Version, nv.State.Message);
-                }
-                nv.Item.Note = "最新 " + rel.Version + "（" + rel.Date + "）；只装驱动+PhysX，不装 NVIDIA App";
-                nv.Invalidate();
-            }
-            catch { }
             status.Text = "检测完成";
         }
 
@@ -196,7 +175,6 @@ namespace P15
                 var det = await Task.Run(() => Detector.Detect());
                 DriverState s; det.TryGetValue(row.Item.Id, out s);
                 bool installed = s != null && s.Status == DrvStatus.Installed;
-                if (row.Item.Kind == PkgKind.NvidiaLatest && err == null) installed = true;
                 if (err == null && installed) { ok++; row.State = s ?? new DriverState { Status = DrvStatus.Installed }; row.State.Status = DrvStatus.Installed; StateFile.Save(row.Item.Id, DrvStatus.Installed, row.State.Version, ""); }
                 else
                 {
@@ -218,19 +196,22 @@ namespace P15
         async Task Cleanup()
         {
             SetBusy(true); bInstall.Enabled = false;
-            status.Text = "正在查找可清理的内容…";
-            var olds = await Task.Run(() => DriverCleanup.FindOldDrivers());
-            long cache = await Task.Run(() => DriverCleanup.PendingBytes());
-            var msg = "将要清理：\n· 驱动安装包缓存和 NVIDIA 安装残留，约 " + (cache / 1048576) + " MB\n· 驱动库里被新版本取代的旧驱动包 " + olds.Count + " 个（正在使用的会自动跳过）";
-            if (!Dialog.Ask(this, "收尾清理", msg, "开始清理"))
-            { SetBusy(false); bInstall.Enabled = true; status.Text = "已取消清理"; return; }
-            status.Text = "正在清理…";
-            int del = 0; long freed = 0;
-            await Task.Run(() => { del = DriverCleanup.DeleteOldDrivers(olds); freed = DriverCleanup.CleanFiles(); });
-            var final = await Task.Run(() => StateFile.Merge(Detector.Detect()));
-            foreach (var r in rows) { DriverState s; if (final.TryGetValue(r.Item.Id, out s)) r.State = s; r.Invalidate(); }
-            SetBusy(false); bInstall.Enabled = true;
-            status.Text = "清理完成：释放 " + (freed / 1048576) + " MB，删除旧驱动包 " + del + " 个" + (Engine.RebootNeeded ? "。部分驱动需要重启后生效" : "");
+            try
+            {
+                status.Text = "正在查找可清理的内容…";
+                var olds = await Task.Run(() => DriverCleanup.FindOldDrivers());
+                long cache = await Task.Run(() => DriverCleanup.PendingBytes());
+                var msg = "将要清理：\n· 驱动安装包缓存，约 " + (cache / 1048576) + " MB\n· 驱动库里被新版本取代的旧驱动包 " + olds.Count + " 个（正在使用的会自动跳过）";
+                if (!Dialog.Ask(this, "收尾清理", msg, "开始清理")) { status.Text = "已取消清理"; return; }
+                status.Text = "正在清理…";
+                int del = 0; long freed = 0;
+                await Task.Run(() => { del = DriverCleanup.DeleteOldDrivers(olds); freed = DriverCleanup.CleanFiles(); });
+                var final = await Task.Run(() => StateFile.Merge(Detector.Detect()));
+                foreach (var r in rows) { DriverState s; if (final.TryGetValue(r.Item.Id, out s)) r.State = s; r.Invalidate(); }
+                status.Text = "清理完成：释放 " + (freed / 1048576) + " MB，删除旧驱动包 " + del + " 个" + (Engine.RebootNeeded ? "。部分驱动需要重启后生效" : "");
+            }
+            catch (Exception ex) { if (!IsDisposed) status.Text = "清理失败：" + ex.Message; }
+            finally { if (!IsDisposed) { SetBusy(false); bInstall.Enabled = true; } }   // 出错也要恢复按钮，不能一直卡在清理中
         }
         static void Reboot()
         {
