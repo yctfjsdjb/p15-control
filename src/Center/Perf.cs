@@ -38,12 +38,46 @@ namespace P15
             return PowerReadACValueIndex(IntPtr.Zero, ref s, ref SubProc, ref CpMinCores, out v) == 0 ? (int)v : -1;
         }
 
-        /// <summary>on=100%（全部唤醒）；off=恢复 Windows 默认 4%</summary>
+        [DllImport("powrprof.dll")] static extern uint PowerEnumerate(IntPtr root, IntPtr scheme, IntPtr sub, int access, uint index, byte[] buffer, ref uint size);
+
+        /// <summary>系统里所有电源计划</summary>
+        static System.Collections.Generic.List<Guid> Schemes()
+        {
+            var list = new System.Collections.Generic.List<Guid>();
+            var buf = new byte[16];
+            for (uint i = 0; ; i++)
+            {
+                uint size = 16;
+                if (PowerEnumerate(IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, 16 /* ACCESS_SCHEME */, i, buf, ref size) != 0) break;
+                list.Add(new Guid(buf));
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// on=100%（全部唤醒）；off=恢复 Windows 默认 4%。
+        /// 这个值是每个电源计划各存一份的：只改当前计划的话，换了计划（或被原厂程序切换）就失效，所以所有计划一起改。
+        /// </summary>
         public static bool SetAllCoresAwake(bool on)
         {
-            var s = Active();
-            if (PowerWriteACValueIndex(IntPtr.Zero, ref s, ref SubProc, ref CpMinCores, on ? 100u : 4u) != 0) return false;
-            return PowerSetActiveScheme(IntPtr.Zero, ref s) == 0;
+            bool ok = true;
+            foreach (var g in Schemes())
+            {
+                var s = g;
+                if (PowerWriteACValueIndex(IntPtr.Zero, ref s, ref SubProc, ref CpMinCores, on ? 100u : 4u) != 0) ok = false;
+            }
+            var a = Active();
+            PowerSetActiveScheme(IntPtr.Zero, ref a);   // 让当前计划立即应用新值
+            return ok && CoreParkingMin() == (on ? 100 : 4);
+        }
+
+        /// <summary>
+        /// 用户开了「唤醒全部核心」，但当前计划里的值被改回去了（开机、换计划、原厂程序重置计划）：重新写入。
+        /// 由托盘在电源计划变化时调用（系统通知，不轮询）。
+        /// </summary>
+        public static void EnforceCoresAwake()
+        {
+            try { if (Settings.GetBool("coresAwake", false) && CoreParkingMin() < 100) SetAllCoresAwake(true); } catch { }
         }
 
         /// <summary>当前被休眠（停放）的逻辑处理器数量</summary>

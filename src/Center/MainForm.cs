@@ -727,6 +727,7 @@ namespace P15
             pfCores.Toggled += (s, e) =>
             {
                 if (pfLoading) return;
+                Settings.SetBool("coresAwake", pfCores.On);   // 记住选择：开机或电源计划被切换后托盘会自动恢复
                 bool ok = PerfTweaks.SetAllCoresAwake(pfCores.On);
                 Say(ok ? (pfCores.On ? "已唤醒全部核心（插电时）" : "已恢复 Windows 默认核心休眠") : "设置失败", !ok);
                 RefreshPerfForce();
@@ -756,7 +757,7 @@ namespace P15
             pfLoading = true;
             int park = PerfTweaks.CoreParkingMin();
             pfCores.On = park >= 100;
-            pfCoresRow.Desc.Text = "插电时核心不休眠，突发负载更跟手\n当前最少唤醒 " + (park < 0 ? "?" : park + "%");
+            pfCoresRow.Desc.Text = "插电时核心不休眠，所有电源计划都生效\n当前最少唤醒 " + (park < 0 ? "?" : park + "%");
 
             if (force || perfCache == null || (DateTime.Now - perfAt).TotalSeconds > 60)
             {

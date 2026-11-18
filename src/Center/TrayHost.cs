@@ -17,6 +17,40 @@ namespace P15
         readonly ToolStripMenuItem[] modeItems;
         MainForm form;
         System.Threading.Timer trimOnce;
+        PlanWatch planWatch;
+
+        /// <summary>
+        /// 接收「电源计划被应用」的系统通知（隐藏的消息窗口，没有轮询）。
+        /// 切换电源计划后，英特尔动态调谐（WUDFHost）会在约 0.3 秒内把「最少不休眠核心」写回 4%，开机时也会这样；
+        /// 所以每次通知后等 1.5 秒（等它写完）再检查，被改回去就重新写入。只在计划变化后运行这一次检查。
+        /// </summary>
+        sealed class PlanWatch : NativeWindow, IDisposable
+        {
+            [DllImport("user32.dll")] static extern IntPtr RegisterPowerSettingNotification(IntPtr h, ref Guid g, int flags);
+            [DllImport("user32.dll")] static extern bool UnregisterPowerSettingNotification(IntPtr h);
+            static Guid ActiveScheme = new Guid("31f9f286-5084-42fe-b720-2b0264993763");   // GUID_ACTIVE_POWERSCHEME
+            readonly IntPtr reg;
+            readonly Timer later = new Timer { Interval = 1500 };
+            public PlanWatch()
+            {
+                later.Tick += (s, e) => { later.Stop(); PerfTweaks.EnforceCoresAwake(); };
+                CreateHandle(new CreateParams { Parent = new IntPtr(-3) });   // 只收消息的窗口（HWND_MESSAGE）
+                reg = RegisterPowerSettingNotification(Handle, ref ActiveScheme, 0);   // 注册时也会立即通知一次，相当于开机检查
+            }
+            protected override void WndProc(ref Message m)
+            {
+                // WM_POWERBROADCAST / PBT_POWERSETTINGCHANGE：重新计时，连续多次通知只在最后一次后检查
+                if (m.Msg == 0x218 && (long)m.WParam == 0x8013) { later.Stop(); later.Start(); }
+                base.WndProc(ref m);
+            }
+            public void Dispose()
+            {
+                later.Stop(); later.Dispose();
+                if (reg != IntPtr.Zero) UnregisterPowerSettingNotification(reg);
+                DestroyHandle();
+            }
+        }
+
         public ICoolerModule Cooler { get; private set; }
         public bool Exiting { get; private set; }
         public event Action PowerChanged;
@@ -50,6 +84,9 @@ namespace P15
             // 蓝光滤镜：启动和显示器变化时恢复（与原厂一致，级别保存在 BIOS APP 数据里）
             ApplyBlueLight();
             SystemEvents.DisplaySettingsChanged += OnDisplayChanged;
+
+            // 「唤醒全部核心」：开机或电源计划被切换（包括原厂程序重置计划）后自动恢复。用系统通知，不轮询
+            planWatch = new PlanWatch();
 
             // 散热器插件：之前已经在用的用户视为已安装
             if (!CoolerPlugin.Asked && Settings.Get("bs2On", "") != "") CoolerPlugin.Wanted = true;
@@ -113,6 +150,7 @@ namespace P15
             Exiting = true;
             tray.Visible = false;
             SystemEvents.DisplaySettingsChanged -= OnDisplayChanged;
+            if (planWatch != null) planWatch.Dispose();
             try { if (Cooler != null) Cooler.Shutdown(); } catch { }
             if (form != null && !form.IsDisposed) form.Close();
             tray.Dispose();
