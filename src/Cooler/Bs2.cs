@@ -13,7 +13,6 @@ using Windows.Storage.Streams;
 namespace P15
 {
     public enum Bs2State { Off, Searching, Connected }
-    /// <summary>Smart* = 按温度曲线托管；Gear1~4 = 固定档位</summary>
     /// <summary>Smart* = 智能变频（按温度曲线）；Fixed = 固定转速（任意转速）；Gear1~4 为旧版档位，读取时转换成固定转速</summary>
     public enum Bs2Mode { SmartQuiet = 0, SmartPerf = 1, Gear1 = 2, Gear2 = 3, Gear3 = 4, Gear4 = 5, SmartCustom = 6, Fixed = 7 }
 
@@ -127,21 +126,30 @@ namespace P15
         /// <summary>最近一次设备回包（命令号, 结果），用于确认设置被接受</summary>
         public volatile int LastAckCmd = -1, LastAckVal = -1;
 
+        readonly object life = new object();
+
+        /// <summary>
+        /// 启动后台连接线程。刚要求停止、线程还没退出时又打开：不另开线程，让原来的线程继续工作，
+        /// 保证任何时候只有一个连接在控制散热器（也不会卡住界面等旧线程退出）。
+        /// </summary>
         public void Start()
         {
-            if (running) return;
-            // 刚关掉又马上打开：等上一次连接完全断开，避免两个连接同时控制、旧连接最后发出"交还控制"
-            if (thread != null && thread.IsAlive) thread.Join(3000);
-            running = true;
-            thread = new Thread(Loop) { IsBackground = true, Name = "BS2" };
-            thread.Start();
+            lock (life)
+            {
+                running = true;
+                if (thread != null) return;
+                thread = new Thread(Loop) { IsBackground = true, Name = "BS2" };
+                thread.Start();
+            }
         }
 
-        public void Stop()
+        /// <summary>停止连接并交还散热器自己的按键控制。wait=false 时只发出停止请求，不等线程退出（界面线程用）</summary>
+        public void Stop(bool wait = true)
         {
-            running = false;
-            if (thread != null) thread.Join(3000);
-            State = Bs2State.Off; Raise();
+            Thread t;
+            lock (life) { running = false; t = thread; }
+            if (wait && t != null) t.Join(3000);
+            Raise();
         }
 
         void Raise() { var h = Changed; if (h != null) try { h(); } catch { } }
@@ -264,13 +272,23 @@ namespace P15
         // ---------- 连接与控制循环 ----------
         void Loop()
         {
-            while (running)
+            while (true)
             {
-                try { Session(); } catch { }
-                Cleanup();
-                if (!running) break;
-                State = Bs2State.Searching; Raise();
-                for (int i = 0; i < 50 && running; i++) Thread.Sleep(100);   // 5 秒后重连
+                while (running)
+                {
+                    try { Session(); } catch { }
+                    Cleanup();
+                    if (!running) break;
+                    State = Bs2State.Searching; Raise();
+                    for (int i = 0; i < 50 && running; i++) Thread.Sleep(100);   // 5 秒后重连
+                }
+                lock (life)
+                {
+                    if (running) continue;   // 停止的过程中又被打开了：接着连接
+                    thread = null; State = Bs2State.Off;
+                }
+                Raise();
+                return;
             }
         }
 

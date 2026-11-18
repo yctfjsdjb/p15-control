@@ -113,7 +113,8 @@ namespace P15
             {
                 if (coolOn.On && !FlydigiServiceCheck()) { coolOn.On = false; return; }
                 Settings.SetBool("bs2On", coolOn.On);
-                if (coolOn.On) cooler.Start(); else Task.Run(() => cooler.Stop());
+                // 停止只发请求不等待：按顺序执行，快速关了又开也不会被延后的「停止」关掉
+                if (coolOn.On) cooler.Start(); else cooler.Stop(false);
                 Sync();
             };
             // 卡片随窗口销毁时取消订阅，引擎继续在后台运行
@@ -182,7 +183,6 @@ namespace P15
             {
                 AutoStart = Settings.GetBool("bs2AutoStart", true),
                 StartStop = ParseStartStop(),
-                GearLed = Settings.GetBool("bs2GearLed", true),
                 AutoConnect = Settings.GetBool("bs2AutoConnect", true) && AutoStart.Enabled
             };
             var r = CoolerSettingsDialog.Show(card.FindForm(), init);
@@ -190,7 +190,6 @@ namespace P15
             // 设备上的选项只在改动时下发；没连上时会排队，连上后自动发送
             if (r.AutoStart != init.AutoStart) { cooler.SetAutoStart(r.AutoStart); Settings.SetBool("bs2AutoStart", r.AutoStart); }
             if (r.StartStop != init.StartStop) { cooler.SetSmartStartStop(r.StartStop); Settings.Set("bs2StartStop", r.StartStop.ToString()); }
-            if (r.GearLed != init.GearLed) { cooler.SetGearLed(r.GearLed); Settings.SetBool("bs2GearLed", r.GearLed); }
             if (r.AutoConnect != init.AutoConnect)
             {
                 Settings.SetBool("bs2AutoConnect", r.AutoConnect);
@@ -212,8 +211,11 @@ namespace P15
             int.TryParse(Settings.Get("bs2RgbSpeed", "6"), out sp);
             int.TryParse(Settings.Get("bs2RgbBright", "100"), out br);
             try { col = ColorTranslator.FromHtml(Settings.Get("bs2RgbColor", "#0050FF")); } catch { col = Color.FromArgb(0, 80, 255); }
-            var r = CoolerLightDialog.Show(card.FindForm(), new CoolerLightDialog.Result { Mode = (Bs2Cooler.RgbMode)m, Color = col, Speed = Math.Max(1, Math.Min(10, sp)), Bright = Math.Max(10, Math.Min(100, br)) });
+            bool gear = Settings.GetBool("bs2GearLed", true);
+            var r = CoolerLightDialog.Show(card.FindForm(), new CoolerLightDialog.Result { Mode = (Bs2Cooler.RgbMode)m, Color = col, Speed = Math.Max(1, Math.Min(10, sp)), Bright = Math.Max(10, Math.Min(100, br)), GearLed = gear });
             if (r == null) return;
+            // 档位数显只在改动时下发；没连上时会排队，连上后自动发送
+            if (r.GearLed != gear) { cooler.SetGearLed(r.GearLed); Settings.SetBool("bs2GearLed", r.GearLed); }
             Settings.Set("bs2RgbMode", ((int)r.Mode).ToString());
             Settings.Set("bs2RgbSpeed", r.Speed.ToString());
             Settings.Set("bs2RgbBright", r.Bright.ToString());

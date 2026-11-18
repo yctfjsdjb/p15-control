@@ -23,6 +23,7 @@ namespace P15
             CoolerPlugin.CleanupIfRemoved();   // 散热器插件已卸载但上次文件被占用：现在删掉
             using (mutex)
             using (var show = new EventWaitHandle(false, EventResetMode.AutoReset, "Global\\P15ControlCenter_Show"))
+            using (var quit = new EventWaitHandle(false, EventResetMode.AutoReset, "Global\\P15ControlCenter_Exit"))
             {
                 if (!created) { show.Set(); return; }   // 已在运行：唤出已有窗口
 
@@ -35,6 +36,8 @@ namespace P15
                 var host = new TrayHost(!args.Contains("--tray"));
                 // 等待「唤出窗口」信号：用线程池等待，不单独占一个线程
                 ThreadPool.RegisterWaitForSingleObject(show, (o, timedOut) => host.ShowMain(), null, -1, false);
+                // 安装包更新 / 卸载前请程序自己退出：散热器先交还按键控制，托盘图标也会正常消失（不用强制结束）
+                ThreadPool.RegisterWaitForSingleObject(quit, (o, timedOut) => host.ExitLater(), null, -1, true);
                 Application.Run(host);
             }
         }

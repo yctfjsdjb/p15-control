@@ -150,6 +150,11 @@ namespace P15
         /// <summary>关掉正在运行的控制中心和驱动安装器（覆盖或删除文件前）</summary>
         public static void StopApp()
         {
+            // 先请控制中心自己退出（散热器交还按键控制、托盘图标正常消失）；6 秒内没退出再强制结束。旧版本没有这个通知，直接结束
+            bool asked = false;
+            try { using (var e = EventWaitHandle.OpenExisting("Global\\P15ControlCenter_Exit")) asked = e.Set(); } catch { }
+            if (asked)
+                for (var sw = Stopwatch.StartNew(); sw.ElapsedMilliseconds < 6000 && Process.GetProcessesByName("P15控制中心").Length > 0; ) Thread.Sleep(200);
             foreach (var n in new[] { "P15控制中心", "P15驱动安装器" })
                 foreach (var p in Process.GetProcessesByName(n))
                     try { p.Kill(); p.WaitForExit(5000); } catch { }

@@ -131,8 +131,6 @@ namespace P15
     /// <summary>透明磨砂玻璃窗口基类：无边框、圆角阴影、系统亚克力</summary>
     public class GlassForm : Form
     {
-        [DllImport("user32.dll")] static extern bool ReleaseCapture();
-        [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, int msg, IntPtr w, IntPtr l);
 
         public GlassForm()
         {

@@ -60,7 +60,7 @@ namespace P15
         public TrayHost(bool showWindow)
         {
             ui.CreateControl();
-            int glassLv; Theme.Level = int.TryParse(Settings.Get("glass", "1"), out glassLv) ? Math.Max(0, Math.Min(2, glassLv)) : 0;
+            int glassLv; Theme.Level = int.TryParse(Settings.Get("glass", "1"), out glassLv) ? Math.Max(0, Math.Min(2, glassLv)) : 1;
 
             var menu = new ContextMenuStrip();
             var modes = new[] { PowerMode.Quiet, PowerMode.PowerSaving, PowerMode.Performance, PowerMode.Entertainment };

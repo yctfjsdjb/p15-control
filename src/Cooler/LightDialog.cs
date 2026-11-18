@@ -9,7 +9,7 @@ namespace P15
     /// <summary>散热器灯效设置弹窗</summary>
     static class CoolerLightDialog
     {
-        public sealed class Result { public Bs2Cooler.RgbMode Mode; public Color Color; public int Speed, Bright; }
+        public sealed class Result { public Bs2Cooler.RgbMode Mode; public Color Color; public int Speed, Bright; public bool GearLed; }
 
         public static Result Show(IWin32Window owner, Result init)
         {
@@ -17,9 +17,9 @@ namespace P15
             using (var f = new GlassForm())
             {
                 f.FormBorderStyle = FormBorderStyle.None; f.StartPosition = FormStartPosition.CenterParent;
-                f.Size = new Size(340, 410); f.ShowInTaskbar = false; f.KeyPreview = true;
+                f.Size = new Size(340, 474); f.ShowInTaskbar = false; f.KeyPreview = true;
                                 f.KeyDown += (s, e) => { if (e.KeyCode == Keys.Escape) f.DialogResult = DialogResult.Cancel; };
-                var res = new Result { Mode = init.Mode, Color = init.Color, Speed = init.Speed, Bright = init.Bright };
+                var res = new Result { Mode = init.Mode, Color = init.Color, Speed = init.Speed, Bright = init.Bright, GearLed = init.GearLed };
 
                 var title = new Label2("散热器灯效") { Font = Theme.H2, Bounds = new Rectangle(18, 14, 300, 26) };
                 title.MouseDown += (s, e) => f.DragMove();
@@ -55,6 +55,12 @@ namespace P15
                 var ss = new Slider { Max = 9, Bounds = new Rectangle(10, 314, 320, 28), Value = res.Speed - 1 };
                 f.Controls.AddRange(new Control[] { lb, sb, ls, ss });
 
+                // 档位数显：散热器面板上是否显示当前档位（与灯效无关，任何效果下都能改）
+                f.Controls.Add(new Label2("档位", true) { Bounds = new Rectangle(18, 350, 200, 22) });
+                var gearOn = new Choice(null, "显示档位", null) { Bounds = new Rectangle(18, 374, 149, 32) };
+                var gearOff = new Choice(null, "不显示档位", null) { Bounds = new Rectangle(173, 374, 149, 32) };
+                f.Controls.Add(gearOn); f.Controls.Add(gearOff);
+
                 Action sync = () =>
                 {
                     for (int i = 0; i < 5; i++) modes[i].Selected = (int)res.Mode == i;
@@ -66,20 +72,23 @@ namespace P15
                     lb.Text = "亮度  " + res.Bright + "%";
                     ls.Text = "速度  " + res.Speed + " / 10";
                     preview.Fill = needColor ? res.Color : (Color?)null;
+                    gearOn.Selected = res.GearLed; gearOff.Selected = !res.GearLed;
                     preview.Invalidate();
                 };
                 for (int i = 0; i < 5; i++) { int idx = i; modes[i].Click += (s, e) => { res.Mode = (Bs2Cooler.RgbMode)idx; sync(); }; }
                 foreach (var sw in sws) sw.Click += (s, e) => { res.Color = ((Swatch)s).Color; sync(); };
+                gearOn.Click += (s, e) => { res.GearLed = true; sync(); };
+                gearOff.Click += (s, e) => { res.GearLed = false; sync(); };
                 more.Click += (s, e) =>
                 {
-                    using (var d = new ColorDialog { FullOpen = true, Color = res.Color })
-                        if (d.ShowDialog(f) == DialogResult.OK) { res.Color = d.Color; sync(); }
+                    var pick = ColorPicker.Show(f, res.Color, "散热器灯颜色");
+                    if (pick.HasValue) { res.Color = pick.Value; sync(); }
                 };
                 sb.ValueChanged += (s, e) => { res.Bright = Math.Max(10, sb.Value * 10); sync(); };
                 ss.ValueChanged += (s, e) => { res.Speed = ss.Value + 1; sync(); };
 
-                var ok = new Btn("应用", true) { Bounds = new Rectangle(176, 360, 146, 34) };
-                var cancel = new Btn("取消") { Bounds = new Rectangle(18, 360, 146, 34) };
+                var ok = new Btn("应用", true) { Bounds = new Rectangle(176, 424, 146, 34) };
+                var cancel = new Btn("取消") { Bounds = new Rectangle(18, 424, 146, 34) };
                 ok.Click += (s, e) => f.DialogResult = DialogResult.OK;
                 cancel.Click += (s, e) => f.DialogResult = DialogResult.Cancel;
                 f.Controls.Add(ok); f.Controls.Add(cancel);

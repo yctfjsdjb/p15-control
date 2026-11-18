@@ -103,23 +103,11 @@ namespace P15
             g.SmoothingMode = sm;
         }
 
-        /// <summary>单色画刷（保留旧接口名；界面里不再使用彩色渐变）</summary>
-        public static Brush Grad(RectangleF r) { return new SolidBrush(P.Text); }
-
         /// <summary>实色块：主按钮、选中、开关开启、进度</summary>
         public static void FillGrad(Graphics g, RectangleF r, float rad) { Fill(g, r, rad, P.Solid); }
 
         /// <summary>磨砂玻璃块（平面，不加描边和反光）</summary>
         public static void Glass(Graphics g, RectangleF r, float rad, Color fill) { Fill(g, r, rad, fill); }
-
-        /// <summary>选中态：黑白反转的实色块</summary>
-        public static void Lit(Graphics g, RectangleF r, float rad) { Fill(g, r, rad, P.Sel); }
-
-        /// <summary>图标字形（单色）</summary>
-        public static void GradText(Graphics g, string s, Font f, RectangleF r, StringAlignment h = StringAlignment.Center)
-        {
-            Text(g, s, f, P.Text, r, h == StringAlignment.Center ? ContentAlignment.MiddleCenter : ContentAlignment.MiddleLeft);
-        }
 
         static StringFormat Fmt(StringAlignment h, StringAlignment v)
         {

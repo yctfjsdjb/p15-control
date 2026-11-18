@@ -224,14 +224,6 @@ namespace P15
         }
 
         // ================= 窗口外观 =================
-        [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int v, int size);
-        [DllImport("user32.dll")] static extern bool ReleaseCapture();
-        [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, int msg, IntPtr w, IntPtr l);
-        [DllImport("psapi.dll")] static extern bool EmptyWorkingSet(IntPtr h);
-        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)] static extern int SetWindowTheme(IntPtr h, string app, string id);
-
-
-
         void BuildHeader()
         {
             var head = new GlassPanel { Bounds = new Rectangle(0, 0, W, HeaderH) };
@@ -755,6 +747,12 @@ namespace P15
         async Task RefreshPerfAsync(bool force)
         {
             pfLoading = true;
+            try { await RefreshPerfCore(force); }
+            finally { pfLoading = false; }   // 检测出错也不能让三个开关一直处于「加载中」而点不动
+        }
+
+        async Task RefreshPerfCore(bool force)
+        {
             int park = PerfTweaks.CoreParkingMin();
             pfCores.On = park >= 100;
             pfCoresRow.Desc.Text = "插电时核心不休眠，所有电源计划都生效\n当前最少唤醒 " + (park < 0 ? "?" : park + "%");
@@ -781,7 +779,6 @@ namespace P15
             pfNote.Text = pending ? "有设置需要重启电脑后生效" : "不改动任何功耗限制，BIOS 配置不受影响";
             pfNote.Fore = pending ? (Color?)Theme.P.Warn : null;
             pfNote.Invalidate();
-            pfLoading = false;
         }
 
         void RefreshFan()
@@ -868,8 +865,8 @@ namespace P15
             more.Click += (s, e) =>
             {
                 if (kb == null) return;
-                using (var d = new ColorDialog { FullOpen = true, Color = Color.FromArgb(kb.R, kb.G, kb.B) })
-                    if (d.ShowDialog(this) == DialogResult.OK) { kb.R = d.Color.R; kb.G = d.Color.G; kb.B = d.Color.B; if (kb.Mode != 2) kb.Mode = 8; ApplyKb(); }
+                var pick = ColorPicker.Show(this, Color.FromArgb(kb.R, kb.G, kb.B), "键盘灯颜色");
+                if (pick.HasValue) { var pc = pick.Value; kb.R = pc.R; kb.G = pc.G; kb.B = pc.B; if (kb.Mode != 2) kb.Mode = 8; ApplyKb(); }
             };
             c.Controls.Add(more);
             kbDeps.AddRange(kbLevel); kbDeps.AddRange(kbModes.Values); kbDeps.AddRange(swatches); kbDeps.Add(more);
@@ -1240,13 +1237,20 @@ namespace P15
             if (drvChecking) return;
             drvChecking = true; drvChecked = DateTime.Now;
             LayoutDrivers();
-            drvStates = await Task.Run(() => StateFile.Merge(Detector.Detect()));
-            drvChecking = false; drvChecked = DateTime.Now;
-            drvCache = drvStates; drvCacheAt = drvChecked;
-            var snap = drvStates;
-            var _ = Task.Run(() => StateFile.SaveSnapshot(snap));
+            Dictionary<string, DriverState> found = null;
+            string err = null;
+            try { found = await Task.Run(() => StateFile.Merge(Detector.Detect())); }
+            catch (Exception ex) { err = ex.Message; }
+            finally { drvChecking = false; }   // 检测出错时不能一直停在「检测中…」
+            if (found != null)
+            {
+                drvStates = found; drvChecked = DateTime.Now;
+                drvCache = found; drvCacheAt = drvChecked;
+                var _ = Task.Run(() => StateFile.SaveSnapshot(found));
+            }
             if (IsDisposed) return;
             LayoutDrivers();
+            if (err != null) Say("检测驱动失败：" + err, true);
         }
 
         DriverState StateOf(DriverItem d)
@@ -1470,7 +1474,9 @@ namespace P15
                 }
                 return Tuple.Create(freed, left);
             });
-            drvCache = null; drvStates = null;
+            drvCache = null;
+            if (IsDisposed) return;   // 删除过程中窗口被关掉了
+            drvStates = null;
             ShowDriverPage();
             if (report.Item2.Count == 0)
                 Say("驱动组件已删除干净，释放 " + (report.Item1 / 1048576.0).ToString("0.#") + " MB");
